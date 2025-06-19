@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Break The Code - Debug</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #222; color: white; }
+        .debug-info { background: #333; padding: 15px; margin: 10px 0; border-radius: 5px; }
+        button { padding: 10px 20px; margin: 5px; background: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background: #45a049; }
+        input { padding: 8px; margin: 5px; border: 1px solid #ccc; border-radius: 3px; }
+        .error { color: #ff6b6b; }
+        .success { color: #51cf66; }
+        .info { color: #74c0fc; }
+    </style>
+</head>
+<body>
+    <h1>🔓 Break The Code - Debug Mode</h1>
+    
+    <div class="debug-info">
+        <h3>Connection Status</h3>
+        <p id="connectionStatus">Not connected</p>
+    </div>
+    
+    <div class="debug-info">
+        <h3>Quick Test</h3>
+        <input type="text" id="testName" placeholder="Enter your name" value="TestPlayer">
+        <button onclick="testCreateRoom()">Test Create Room</button>
+        <button onclick="testConsole()">Test Console</button>
+        <p id="testResult"></p>
+    </div>
+    
+    <div class="debug-info">
+        <h3>Console Output</h3>
+        <div id="consoleOutput" style="background: #111; padding: 10px; font-family: monospace; max-height: 300px; overflow-y: auto;"></div>
+    </div>
+    
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        // Override console.log to show in the page
+        const originalLog = console.log;
+        const consoleOutput = document.getElementById('consoleOutput');
+        
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            const message = args.map(arg => 
+                typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+            ).join(' ');
+            consoleOutput.innerHTML += '<div>' + new Date().toLocaleTimeString() + ': ' + message + '</div>';
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        };
+        
+        // Test Socket.IO connection
+        let socket = null;
+        
+        function initSocket() {
+            console.log('🔗 Initializing Socket.IO connection...');
+            socket = io();
+            
+            socket.on('connect', () => {
+                console.log('✅ Connected to server!');
+                document.getElementById('connectionStatus').innerHTML = '<span class="success">Connected ✅</span>';
+            });
+            
+            socket.on('disconnect', () => {
+                console.log('❌ Disconnected from server');
+                document.getElementById('connectionStatus').innerHTML = '<span class="error">Disconnected ❌</span>';
+            });
+            
+            socket.on('roomCreated', (data) => {
+                console.log('🏠 Room created:', data);
+                document.getElementById('testResult').innerHTML = `<span class="success">Room created: ${data.roomCode}</span>`;
+            });
+            
+            socket.on('error', (error) => {
+                console.log('⚠️ Socket error:', error);
+                document.getElementById('testResult').innerHTML = `<span class="error">Error: ${error}</span>`;
+            });
+        }
+        
+        function testCreateRoom() {
+            const name = document.getElementById('testName').value || 'TestPlayer';
+            console.log('🧪 Testing room creation with name:', name);
+            
+            if (!socket) {
+                document.getElementById('testResult').innerHTML = '<span class="error">Socket not connected!</span>';
+                return;
+            }
+            
+            socket.emit('createRoom', name);
+        }
+        
+        function testConsole() {
+            console.log('🧪 Console test - this should appear above');
+            console.log('📊 Socket connected:', socket && socket.connected);
+            console.log('🌐 Current URL:', window.location.href);
+            console.log('📱 User Agent:', navigator.userAgent);
+        }
+        
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('🚀 Debug page loaded');
+            initSocket();
+            testConsole();
+        });
+    </script>
+</body>
+</html> 

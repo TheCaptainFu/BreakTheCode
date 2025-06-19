@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Loading Fix</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #222; color: white; }
+        .test-result { background: #333; padding: 15px; margin: 10px 0; border-radius: 5px; }
+        .success { color: #51cf66; }
+        .error { color: #ff6b6b; }
+        button { padding: 10px 20px; background: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; margin: 5px; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Testing Loading Animation Fix</h1>
+    
+    <div class="test-result">
+        <h3>Test Status</h3>
+        <p id="testStatus">Ready to test...</p>
+    </div>
+    
+    <button onclick="testCreateRoom()">Test Create Room</button>
+    <button onclick="testConnection()">Test Connection</button>
+    
+    <div class="test-result">
+        <h3>Expected Behavior:</h3>
+        <ol>
+            <li>Click "Test Create Room"</li>
+            <li>Loading animation should appear</li>
+            <li>Room should be created</li>
+            <li>Loading animation should disappear</li>
+            <li>Success message should show</li>
+        </ol>
+    </div>
+    
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        let socket = io();
+        let loadingVisible = false;
+        
+        socket.on('connect', () => {
+            document.getElementById('testStatus').innerHTML = '<span class="success">✅ Connected to server</span>';
+        });
+        
+        socket.on('roomCreated', (data) => {
+            console.log('Room created:', data);
+            hideLoading();
+            document.getElementById('testStatus').innerHTML = `<span class="success">✅ Room created: ${data.roomCode} - Loading properly hidden!</span>`;
+        });
+        
+        socket.on('error', (error) => {
+            hideLoading();
+            document.getElementById('testStatus').innerHTML = `<span class="error">❌ Error: ${error}</span>`;
+        });
+        
+        function showLoading(text) {
+            loadingVisible = true;
+            document.getElementById('testStatus').innerHTML = `<span style="color: #74c0fc;">⏳ ${text}</span>`;
+        }
+        
+        function hideLoading() {
+            loadingVisible = false;
+            // Will be updated by success/error handlers
+        }
+        
+        function testCreateRoom() {
+            showLoading('Creating room...');
+            socket.emit('createRoom', 'TestUser');
+            
+            // Test timeout
+            setTimeout(() => {
+                if (loadingVisible) {
+                    hideLoading();
+                    document.getElementById('testStatus').innerHTML = '<span class="error">❌ Timeout - Loading animation stuck!</span>';
+                }
+            }, 5000);
+        }
+        
+        function testConnection() {
+            document.getElementById('testStatus').innerHTML = `<span class="success">Socket connected: ${socket.connected}</span>`;
+        }
+    </script>
+</body>
+</html> 
