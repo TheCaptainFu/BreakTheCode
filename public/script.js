@@ -92,8 +92,18 @@ class BreakTheCodeGame {
         this.socket.on('gameStart', (data) => {
             console.log('🚀 Game started:', data);
             this.gameState.gameStatus = 'playing';
+            this.gameState.currentTurn = data.currentTurn;
+            this.gameState.isMyTurn = data.currentTurn === this.socket.id;
+            
+            // Find your secret number from the players data
+            const yourPlayer = data.players.find(p => p.name === this.gameState.playerName);
+            if (yourPlayer) {
+                this.gameState.secretNumber = yourPlayer.secretNumber;
+            }
+            
             this.showGameScreen();
             this.showNotification(data.message, 'success');
+            this.updateTurnDisplay();
             this.playSound('gameStart');
         });
         
@@ -111,12 +121,20 @@ class BreakTheCodeGame {
         
         this.socket.on('guessResult', (data) => {
             console.log('🎯 Guess result:', data);
+            this.gameState.isMyTurn = data.isYourTurn || false;
             this.handleGuessResult(data);
+            this.updateTurnDisplay();
         });
         
         this.socket.on('opponentGuess', (data) => {
             console.log('👀 Opponent guess:', data);
+            this.gameState.isMyTurn = data.isYourTurn || false;
             this.handleOpponentGuess(data);
+            this.updateTurnDisplay();
+            
+            if (data.turnMessage) {
+                this.showNotification(data.turnMessage, 'info');
+            }
         });
         
         this.socket.on('gameWon', (data) => {
@@ -296,6 +314,11 @@ class BreakTheCodeGame {
     }
     
     submitGuess() {
+        if (!this.gameState.isMyTurn) {
+            this.showNotification("Not your turn! Wait for your opponent to guess.", 'warning');
+            return;
+        }
+        
         const digits = [
             document.getElementById('guess1').value,
             document.getElementById('guess2').value,
@@ -358,7 +381,11 @@ class BreakTheCodeGame {
         this.gameState.guesses.push(data);
         this.addGuessToList('yourGuessesList', data, true);
         this.updateGuessCounter();
-        this.disableGuessInputs(false);
+        
+        // Only re-enable inputs if it's still your turn
+        if (data.isYourTurn) {
+            this.disableGuessInputs(false);
+        }
         
         if (data.result.correctPlace === 4) {
             this.showNotification('🎉 You cracked the code!', 'success');
@@ -443,6 +470,9 @@ class BreakTheCodeGame {
         document.getElementById('yourScore').textContent = this.gameState.score.yours;
         document.getElementById('opponentScore').textContent = this.gameState.score.opponent;
         
+        // Show your secret number
+        this.displaySecretNumber();
+        
         // Clear previous guesses
         this.clearGuessList('yourGuessesList');
         this.clearGuessList('opponentGuessesList');
@@ -475,7 +505,13 @@ class BreakTheCodeGame {
         }
         
         finalGuesses.textContent = data.totalGuesses || this.gameState.guesses.length;
-        secretNumberReveal.textContent = data.secretNumber;
+        
+        // Show the opponent's secret number (the one that was cracked)
+        if (isWinner) {
+            secretNumberReveal.textContent = data.loserSecretNumber;
+        } else {
+            secretNumberReveal.textContent = data.winnerSecretNumber;
+        }
     }
     
     updatePlayerCard(cardId, name, status, ready) {
@@ -572,6 +608,38 @@ class BreakTheCodeGame {
         document.getElementById('guessCounter').textContent = this.gameState.guesses.length + 1;
     }
     
+    updateTurnDisplay() {
+        const turnIndicator = document.getElementById('turnIndicator');
+        const submitBtn = document.getElementById('submitGuessBtn');
+        
+        if (!turnIndicator) return;
+        
+        if (this.gameState.isMyTurn) {
+            turnIndicator.innerHTML = '<i class="fas fa-arrow-right"></i> Your Turn';
+            turnIndicator.className = 'turn-indicator your-turn';
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Submit Guess';
+            }
+            this.disableGuessInputs(false);
+        } else {
+            turnIndicator.innerHTML = '<i class="fas fa-clock"></i> Opponent\'s Turn';
+            turnIndicator.className = 'turn-indicator opponent-turn';
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Wait for opponent...';
+            }
+            this.disableGuessInputs(true);
+        }
+    }
+    
+    displaySecretNumber() {
+        const secretDisplay = document.getElementById('yourSecretNumber');
+        if (secretDisplay && this.gameState.secretNumber) {
+            secretDisplay.textContent = this.gameState.secretNumber;
+        }
+    }
+    
     // Utility Methods
     switchScreen(screenId) {
         document.querySelectorAll('.screen').forEach(screen => {
@@ -591,7 +659,12 @@ class BreakTheCodeGame {
         ['guess1', 'guess2', 'guess3', 'guess4'].forEach(id => {
             document.getElementById(id).disabled = disabled;
         });
-        document.getElementById('submitGuessBtn').disabled = disabled;
+        
+        // Don't disable submit button if it's handled by turn display
+        const submitBtn = document.getElementById('submitGuessBtn');
+        if (submitBtn && !document.getElementById('turnIndicator')) {
+            submitBtn.disabled = disabled;
+        }
         
         if (!disabled) {
             document.getElementById('guess1').focus();

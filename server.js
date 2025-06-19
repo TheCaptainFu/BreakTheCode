@@ -119,7 +119,7 @@ function isRateLimited(socketId, action, maxActions = MAX_GUESSES_PER_MINUTE) {
     return actionCount > maxActions;
 }
 
-// Core game logic - evaluate guess against secret number
+// Core game logic - evaluate guess against secret number (FIXED ALGORITHM)
 function evaluateGuess(secret, guess) {
     const secretStr = secret.toString().padStart(4, '0');
     const guessStr = guess.toString().padStart(4, '0');
@@ -127,26 +127,30 @@ function evaluateGuess(secret, guess) {
     let correctPlace = 0;
     let wrongPlace = 0;
     
-    // Count correct positions first
+    // Create arrays to track which positions we've already counted
+    const secretUsed = new Array(4).fill(false);
+    const guessUsed = new Array(4).fill(false);
+    
+    // First pass: count correct positions
     for (let i = 0; i < 4; i++) {
         if (secretStr[i] === guessStr[i]) {
             correctPlace++;
+            secretUsed[i] = true;
+            guessUsed[i] = true;
         }
     }
     
-    // Count digits in wrong positions
-    for (let digit = '0'; digit <= '9'; digit++) {
-        let secretCount = 0;
-        let guessCount = 0;
-        let correctPositions = 0;
-        
-        for (let i = 0; i < 4; i++) {
-            if (secretStr[i] === digit) secretCount++;
-            if (guessStr[i] === digit) guessCount++;
-            if (secretStr[i] === digit && guessStr[i] === digit) correctPositions++;
+    // Second pass: count wrong positions (digits that exist but in wrong place)
+    for (let i = 0; i < 4; i++) {
+        if (!guessUsed[i]) { // Only check digits not already counted as correct
+            for (let j = 0; j < 4; j++) {
+                if (!secretUsed[j] && secretStr[j] === guessStr[i]) {
+                    wrongPlace++;
+                    secretUsed[j] = true;
+                    break; // Found a match, move to next guess digit
+                }
+            }
         }
-        
-        wrongPlace += Math.min(secretCount, guessCount) - correctPositions;
     }
     
     return { correctPlace, wrongPlace };
@@ -176,6 +180,8 @@ io.on('connection', (socket) => {
             gameState: 'waiting', // waiting, setup, playing, finished
             guesses: {},
             winner: null,
+            currentTurn: null, // Which player's turn it is
+            turnCount: 0, // Total number of turns taken
             createdAt: new Date()
         };
         
@@ -289,11 +295,18 @@ io.on('connection', (socket) => {
                 room.guesses[id] = [];
             });
             
+            // Set the first turn (room creator goes first)
+            const roomCreatorId = playerIds.find(id => room.players[id].name === playerData.playerName);
+            room.currentTurn = roomCreatorId || playerIds[0];
+            room.turnCount = 0;
+            
             io.to(playerData.roomCode).emit('gameStart', {
                 message: 'Both players ready! The guessing battle begins! 🔥',
+                currentTurn: room.currentTurn,
                 players: Object.values(room.players).map(p => ({
                     name: p.name,
-                    ready: p.ready
+                    ready: p.ready,
+                    secretNumber: p.secretNumber // Send secret number to each player
                 }))
             });
             
@@ -305,7 +318,7 @@ io.on('connection', (socket) => {
         }
     });
     
-    // Make a guess
+    // Make a guess (TURN-BASED)
     socket.on('makeGuess', (guess) => {
         // Security checks
         if (isRateLimited(socket.id, 'makeGuess', MAX_GUESSES_PER_MINUTE)) {
@@ -318,6 +331,12 @@ io.on('connection', (socket) => {
         
         const room = rooms.get(playerData.roomCode);
         if (!room || room.gameState !== 'playing') return;
+        
+        // Check if it's this player's turn
+        if (room.currentTurn !== socket.id) {
+            socket.emit('error', 'Not your turn! Wait for your opponent to guess.');
+            return;
+        }
         
         if (!isValidNumber(guess)) {
             socket.emit('error', 'Guess must be exactly 4 digits!');
@@ -342,6 +361,7 @@ io.on('connection', (socket) => {
         };
         
         room.players[socket.id].guesses.push(guessData);
+        room.turnCount++;
         
         // Check for win
         if (result.correctPlace === 4) {
@@ -351,25 +371,32 @@ io.on('connection', (socket) => {
             
             io.to(playerData.roomCode).emit('gameWon', {
                 winner: room.players[socket.id].name,
-                secretNumber: opponent.secretNumber,
+                winnerSecretNumber: room.players[socket.id].secretNumber,
+                loserSecretNumber: opponent.secretNumber,
                 totalGuesses: room.players[socket.id].guesses.length
             });
             
             console.log(`🏆 ${room.players[socket.id].name} won in room: ${playerData.roomCode}`);
         } else {
+            // Switch turns
+            room.currentTurn = opponentId;
+            
             // Send result to guesser
             socket.emit('guessResult', {
                 guess: guessStr,
                 result,
-                guessNumber: room.players[socket.id].guesses.length
+                guessNumber: room.players[socket.id].guesses.length,
+                isYourTurn: false
             });
             
-            // Notify opponent
+            // Notify opponent (now it's their turn)
             socket.to(playerData.roomCode).emit('opponentGuess', {
                 playerName: room.players[socket.id].name,
                 guess: guessStr,
                 result,
-                guessNumber: room.players[socket.id].guesses.length
+                guessNumber: room.players[socket.id].guesses.length,
+                isYourTurn: true,
+                turnMessage: "It's your turn to guess!"
             });
         }
     });

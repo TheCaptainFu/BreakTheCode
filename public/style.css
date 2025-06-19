@@ -1106,4 +1106,81 @@ body {
     .modal-content {
         margin: 20px;
     }
+}
+
+/* Turn Indicator */
+.turn-indicator {
+    background: var(--bg-card);
+    backdrop-filter: blur(30px);
+    border: 2px solid var(--border);
+    border-radius: 16px;
+    padding: 16px 24px;
+    margin-bottom: 24px;
+    text-align: center;
+    font-weight: 700;
+    font-size: 1.1rem;
+    transition: all 0.3s var(--ease);
+    animation: fadeIn 0.5s var(--ease);
+}
+
+.turn-indicator.your-turn {
+    border-color: #43e97b;
+    background: linear-gradient(135deg, rgba(67, 233, 123, 0.1), rgba(67, 233, 123, 0.05));
+    color: #43e97b;
+    box-shadow: 0 8px 32px rgba(67, 233, 123, 0.2);
+}
+
+.turn-indicator.opponent-turn {
+    border-color: #fa709a;
+    background: linear-gradient(135deg, rgba(250, 112, 154, 0.1), rgba(250, 112, 154, 0.05));
+    color: #fa709a;
+    box-shadow: 0 8px 32px rgba(250, 112, 154, 0.2);
+}
+
+.turn-indicator i {
+    margin-right: 8px;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+/* Secret Number Display */
+.secret-number-display {
+    background: var(--bg-card);
+    backdrop-filter: blur(30px);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 24px;
+    text-align: center;
+    animation: fadeIn 0.5s var(--ease);
+}
+
+.secret-label {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 600;
+}
+
+.secret-number {
+    font-family: var(--font-mono);
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--primary);
+    background: var(--primary-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: 8px;
+    margin-top: 4px;
+}
+
+/* Notification warning type */
+.notification.warning {
+    border-left: 4px solid #ffa726;
 } 
