@@ -60,10 +60,164 @@ const io = socketIo(server, {
 // Serve static files from public directory
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Analytics endpoint
+app.get('/analytics', (req, res) => {
+    const analyticsData = getAnalytics();
+    res.json(analyticsData);
+});
+
+// Analytics dashboard endpoint (HTML)
+app.get('/admin/analytics', (req, res) => {
+    res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Break The Code - Analytics Dashboard</title>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 20px; background: #1a1a2e; color: #fff; }
+            .container { max-width: 1200px; margin: 0 auto; }
+            .header { text-align: center; margin-bottom: 30px; }
+            .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 30px; }
+            .stat-card { background: #16213e; padding: 20px; border-radius: 10px; border: 1px solid #0f3460; }
+            .stat-value { font-size: 2em; font-weight: bold; color: #43e97b; }
+            .stat-label { color: #8892b0; margin-top: 5px; }
+            .refresh-btn { background: #43e97b; color: #1a1a2e; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin: 10px; }
+            .activity-section { background: #16213e; padding: 20px; border-radius: 10px; border: 1px solid #0f3460; margin-bottom: 20px; }
+            .room-item { background: #0f3460; padding: 10px; margin: 5px 0; border-radius: 5px; }
+            .game-item { background: #0f3460; padding: 8px; margin: 3px 0; border-radius: 3px; font-size: 0.9em; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>🎮 Break The Code - Analytics Dashboard</h1>
+                <button class="refresh-btn" onclick="location.reload()">🔄 Refresh Data</button>
+                <button class="refresh-btn" onclick="toggleAutoRefresh()">⏱️ Auto Refresh</button>
+            </div>
+            
+            <div id="analytics-content">
+                Loading analytics...
+            </div>
+        </div>
+        
+        <script>
+            let autoRefreshInterval = null;
+            
+            function formatUptime(seconds) {
+                const hours = Math.floor(seconds / 3600);
+                const minutes = Math.floor((seconds % 3600) / 60);
+                const secs = seconds % 60;
+                return hours + 'h ' + minutes + 'm ' + secs + 's';
+            }
+            
+            function formatDate(dateString) {
+                return new Date(dateString).toLocaleString();
+            }
+            
+            function loadAnalytics() {
+                fetch('/analytics')
+                    .then(response => response.json())
+                    .then(data => {
+                        document.getElementById('analytics-content').innerHTML = \`
+                            <div class="stats-grid">
+                                <div class="stat-card">
+                                    <div class="stat-value">\${data.connections.current}</div>
+                                    <div class="stat-label">Currently Connected</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-value">\${data.connections.total}</div>
+                                    <div class="stat-label">Total Connections</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-value">\${data.connections.peak}</div>
+                                    <div class="stat-label">Peak Connections</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-value">\${data.rooms.active}</div>
+                                    <div class="stat-label">Active Rooms</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-value">\${data.games.totalPlayed}</div>
+                                    <div class="stat-label">Games Played</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-value">\${data.games.averageGuessesPerGame}</div>
+                                    <div class="stat-label">Avg Guesses/Game</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-value">\${formatUptime(data.server.uptime)}</div>
+                                    <div class="stat-label">Server Uptime</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-value">\${data.connections.lastHour}</div>
+                                    <div class="stat-label">Connections (Last Hour)</div>
+                                </div>
+                            </div>
+                            
+                            <div class="activity-section">
+                                <h3>🏠 Active Rooms (\${data.recentActivity.activeRooms.length})</h3>
+                                \${data.recentActivity.activeRooms.map(room => \`
+                                    <div class="room-item">
+                                        <strong>\${room.code}</strong> - \${room.playerCount}/2 players - \${room.gameState} 
+                                        <small>(Created: \${formatDate(room.createdAt)})</small>
+                                    </div>
+                                \`).join('')}
+                                \${data.recentActivity.activeRooms.length === 0 ? '<div class="room-item">No active rooms</div>' : ''}
+                            </div>
+                            
+                            <div class="activity-section">
+                                <h3>🎯 Recent Games (\${data.recentActivity.last10Games.length})</h3>
+                                \${data.recentActivity.last10Games.map(game => \`
+                                    <div class="game-item">
+                                        <strong>\${game.winner}</strong> won in \${game.totalGuesses} guesses 
+                                        (\${game.gameDuration}s) - \${formatDate(game.timestamp)}
+                                    </div>
+                                \`).join('')}
+                                \${data.recentActivity.last10Games.length === 0 ? '<div class="game-item">No recent games</div>' : ''}
+                            </div>
+                        \`;
+                    })
+                    .catch(error => {
+                        document.getElementById('analytics-content').innerHTML = '<p>Error loading analytics: ' + error.message + '</p>';
+                    });
+            }
+            
+            function toggleAutoRefresh() {
+                if (autoRefreshInterval) {
+                    clearInterval(autoRefreshInterval);
+                    autoRefreshInterval = null;
+                    alert('Auto refresh disabled');
+                } else {
+                    autoRefreshInterval = setInterval(loadAnalytics, 10000); // Refresh every 10 seconds
+                    alert('Auto refresh enabled (10s interval)');
+                }
+            }
+            
+            // Load analytics on page load
+            loadAnalytics();
+        </script>
+    </body>
+    </html>
+    `);
+});
+
 // Game state management
 const rooms = new Map();
 const players = new Map();
 const playerActions = new Map(); // Track player actions for anti-cheat
+
+// Analytics tracking
+const analytics = {
+    totalConnections: 0,
+    currentConnections: 0,
+    totalRoomsCreated: 0,
+    totalGamesPlayed: 0,
+    totalGuesses: 0,
+    peakConnections: 0,
+    serverStartTime: new Date(),
+    connectionHistory: [], // Store connection events for last 24h
+    gameHistory: [] // Store game completion events
+};
 
 // Security constants
 const MAX_ROOM_CODE_LENGTH = 6;
@@ -167,9 +321,115 @@ function evaluateGuess(secret, guess) {
     return { correctPlace, wrongPlace };
 }
 
+// Analytics functions
+function trackConnection(type, socketId, playerName = null) {
+    const now = new Date();
+    
+    if (type === 'connect') {
+        analytics.totalConnections++;
+        analytics.currentConnections++;
+        if (analytics.currentConnections > analytics.peakConnections) {
+            analytics.peakConnections = analytics.currentConnections;
+        }
+    } else if (type === 'disconnect') {
+        analytics.currentConnections = Math.max(0, analytics.currentConnections - 1);
+    }
+    
+    // Store connection event (keep last 24 hours)
+    analytics.connectionHistory.push({
+        type,
+        socketId,
+        playerName,
+        timestamp: now
+    });
+    
+    // Clean old connection history (older than 24 hours)
+    const oneDayAgo = now.getTime() - (24 * 60 * 60 * 1000);
+    analytics.connectionHistory = analytics.connectionHistory.filter(
+        event => event.timestamp.getTime() > oneDayAgo
+    );
+    
+    console.log(`📊 Analytics: ${analytics.currentConnections} connected, ${rooms.size} active rooms`);
+}
+
+function trackRoomCreated() {
+    analytics.totalRoomsCreated++;
+}
+
+function trackGameCompleted(roomCode, winner, totalGuesses, gameDuration) {
+    analytics.totalGamesPlayed++;
+    analytics.totalGuesses += totalGuesses;
+    
+    // Store game completion event
+    analytics.gameHistory.push({
+        roomCode,
+        winner,
+        totalGuesses,
+        gameDuration,
+        timestamp: new Date()
+    });
+    
+    // Keep only last 100 games
+    if (analytics.gameHistory.length > 100) {
+        analytics.gameHistory = analytics.gameHistory.slice(-100);
+    }
+}
+
+function getAnalytics() {
+    const now = new Date();
+    const uptime = Math.floor((now - analytics.serverStartTime) / 1000); // in seconds
+    
+    // Calculate connections in last hour
+    const oneHourAgo = now.getTime() - (60 * 60 * 1000);
+    const connectionsLastHour = analytics.connectionHistory.filter(
+        event => event.type === 'connect' && event.timestamp.getTime() > oneHourAgo
+    ).length;
+    
+    // Calculate average game duration
+    const recentGames = analytics.gameHistory.slice(-20); // Last 20 games
+    const avgGameDuration = recentGames.length > 0 
+        ? Math.round(recentGames.reduce((sum, game) => sum + (game.gameDuration || 0), 0) / recentGames.length)
+        : 0;
+    
+    return {
+        server: {
+            uptime: uptime,
+            startTime: analytics.serverStartTime
+        },
+        connections: {
+            current: analytics.currentConnections,
+            total: analytics.totalConnections,
+            peak: analytics.peakConnections,
+            lastHour: connectionsLastHour
+        },
+        rooms: {
+            active: rooms.size,
+            totalCreated: analytics.totalRoomsCreated
+        },
+        games: {
+            totalPlayed: analytics.totalGamesPlayed,
+            totalGuesses: analytics.totalGuesses,
+            averageGuessesPerGame: analytics.totalGamesPlayed > 0 
+                ? Math.round(analytics.totalGuesses / analytics.totalGamesPlayed) 
+                : 0,
+            averageDuration: avgGameDuration
+        },
+        recentActivity: {
+            last10Games: analytics.gameHistory.slice(-10),
+            activeRooms: Array.from(rooms.values()).map(room => ({
+                code: room.code,
+                playerCount: Object.keys(room.players).length,
+                gameState: room.gameState,
+                createdAt: room.createdAt
+            }))
+        }
+    };
+}
+
 // Socket.IO connection handling
 io.on('connection', (socket) => {
     console.log(`🎮 Player connected: ${socket.id}`);
+    trackConnection('connect', socket.id);
     
     // Create a new game room
     socket.on('createRoom', (playerName) => {
@@ -193,7 +453,8 @@ io.on('connection', (socket) => {
             winner: null,
             currentTurn: null, // Which player's turn it is
             turnCount: 0, // Total number of turns taken
-            createdAt: new Date()
+            createdAt: new Date(),
+            gameStartTime: null // Track when game actually starts
         };
         
         room.players[socket.id] = {
@@ -207,6 +468,10 @@ io.on('connection', (socket) => {
         
         rooms.set(roomCode, room);
         players.set(socket.id, { roomCode, playerName });
+        
+        // Track analytics
+        trackConnection('connect', socket.id, playerName);
+        trackRoomCreated();
         
         socket.join(roomCode);
         socket.emit('roomCreated', { roomCode, playerName });
@@ -312,6 +577,7 @@ io.on('connection', (socket) => {
         
         if (allReady) {
             room.gameState = 'playing';
+            room.gameStartTime = new Date(); // Track game start time
             room.guesses = {};
             playerIds.forEach(id => {
                 room.guesses[id] = [];
@@ -402,6 +668,19 @@ io.on('connection', (socket) => {
             room.winner = socket.id;
             room.players[socket.id].score++;
             
+            // Calculate game duration
+            const gameDuration = room.gameStartTime 
+                ? Math.floor((new Date() - room.gameStartTime) / 1000) 
+                : 0;
+            
+            // Track analytics
+            trackGameCompleted(
+                playerData.roomCode, 
+                room.players[socket.id].name, 
+                room.players[socket.id].guesses.length,
+                gameDuration
+            );
+            
             io.to(playerData.roomCode).emit('gameWon', {
                 winner: room.players[socket.id].name,
                 winnerSecretNumber: room.players[socket.id].secretNumber,
@@ -409,7 +688,7 @@ io.on('connection', (socket) => {
                 totalGuesses: room.players[socket.id].guesses.length
             });
             
-            console.log(`🏆 ${room.players[socket.id].name} won in room: ${playerData.roomCode}`);
+            console.log(`🏆 ${room.players[socket.id].name} won in room: ${playerData.roomCode} in ${gameDuration}s`);
         } else {
             // Switch turns
             room.currentTurn = opponentId;
@@ -586,6 +865,8 @@ io.on('connection', (socket) => {
     // Handle disconnect
     socket.on('disconnect', () => {
         const playerData = players.get(socket.id);
+        trackConnection('disconnect', socket.id, playerData?.playerName);
+        
         if (playerData) {
             const room = rooms.get(playerData.roomCode);
             if (room) {
@@ -629,12 +910,22 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`🚀 Break The Code server running on port ${PORT}`);
     console.log(`🌐 Access the game at: http://localhost:${PORT}`);
+    console.log(`📊 Analytics dashboard: http://localhost:${PORT}/admin/analytics`);
+    console.log(`📈 Analytics API: http://localhost:${PORT}/analytics`);
     console.log(`🎮 Active rooms: ${rooms.size}`);
 });
+
+// Periodic analytics logging (every 5 minutes)
+setInterval(() => {
+    const stats = getAnalytics();
+    console.log(`📊 [Analytics] Connected: ${stats.connections.current} | Rooms: ${stats.rooms.active} | Games Played: ${stats.games.totalPlayed} | Uptime: ${Math.floor(stats.server.uptime / 60)}min`);
+}, 5 * 60 * 1000);
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
     console.log('🛑 Server shutting down gracefully...');
+    const finalStats = getAnalytics();
+    console.log(`📊 Final Stats - Total Connections: ${finalStats.connections.total}, Games Played: ${finalStats.games.totalPlayed}, Peak Connections: ${finalStats.connections.peak}`);
     server.close(() => {
         console.log('✅ Server closed');
         process.exit(0);

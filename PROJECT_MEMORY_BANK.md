@@ -117,6 +117,12 @@ this.gameState = {
    - Room rejoin functionality after disconnect
    - Seamless game continuation after reconnection
 
+8. **Analytics System** ⭐ *NEW*
+   - Real-time player connection tracking
+   - Game statistics and performance metrics
+   - Visual analytics dashboard with auto-refresh
+   - API endpoint for external monitoring
+
 ### UI/UX Features
 1. **Modern Design System**
    - Glassmorphism aesthetic
@@ -135,6 +141,12 @@ this.gameState = {
    - Turn indicators with color coding
    - Guess history with formatted results
    - Score tracking
+
+4. **Analytics Dashboard** ⭐ *NEW*
+   - Real-time connection monitoring
+   - Active room tracking
+   - Game completion statistics
+   - Server performance metrics
 
 ### Security Features
 1. **Input Validation**
@@ -500,3 +512,85 @@ First player to guess all 4 digits in correct positions wins the game.
 ---
 
 *This memory bank serves as the complete reference for the Break The Code project. All architectural decisions, code patterns, challenges, and solutions are documented for future development sessions.*
+
+## 📊 Analytics & Monitoring System
+
+### Real-Time Analytics Features
+1. **Connection Tracking**
+   - Current active connections
+   - Total connections since server start
+   - Peak concurrent connections
+   - Connection history (last 24 hours)
+   - Connections per hour tracking
+
+2. **Game Statistics**
+   - Total games played
+   - Total guesses made across all games
+   - Average guesses per game
+   - Average game duration
+   - Recent game history (last 100 games)
+
+3. **Room Management Analytics**
+   - Active rooms count
+   - Total rooms created
+   - Room state tracking (waiting, setup, playing, finished)
+   - Player count per room
+
+4. **Server Performance**
+   - Server uptime tracking
+   - Memory usage monitoring
+   - Request rate limiting statistics
+
+### Analytics Endpoints
+
+#### **GET /analytics** - JSON API
+Returns comprehensive analytics data:
+```json
+{
+  "server": {
+    "uptime": 1800,
+    "startTime": "2025-06-22T17:26:18.673Z"
+  },
+  "connections": {
+    "current": 5,
+    "total": 47,
+    "peak": 12,
+    "lastHour": 8
+  },
+  "rooms": {
+    "active": 2,
+    "totalCreated": 23
+  },
+  "games": {
+    "totalPlayed": 18,
+    "totalGuesses": 156,
+    "averageGuessesPerGame": 9,
+    "averageDuration": 180
+  },
+  "recentActivity": {
+    "last10Games": [...],
+    "activeRooms": [...]
+  }
+}
+```
+
+#### **GET /admin/analytics** - Visual Dashboard
+- Beautiful real-time analytics dashboard
+- Auto-refresh functionality (10-second intervals)
+- Dark theme matching game design
+- Mobile-responsive layout
+- Live activity monitoring
+
+### Console Logging
+- Real-time connection events with analytics summary
+- Periodic analytics reports (every 5 minutes)
+- Game completion tracking with duration
+- Server startup analytics information
+- Graceful shutdown with final statistics
+
+### Security & Performance
+- Rate limiting on analytics endpoints
+- Automatic cleanup of old data (24h connection history)
+- Memory-efficient data storage
+- No sensitive player data exposed
+- CORS protection for analytics endpoints
