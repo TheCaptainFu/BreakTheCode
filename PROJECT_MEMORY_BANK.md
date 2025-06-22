@@ -254,12 +254,24 @@ this.socket = io({
 - **Player Status Accuracy**: Fixed `updateRoomDisplay` to properly check `player.ready` status before showing "Ready!"
 - **New Game Functionality**: Added proper room cleanup with `leaveRoom` event and complete state reset
 
-### 6. Missing Dependencies Error
+### 6. Player Card Display Issues (CRITICAL FIX) ⭐ *NEW*
+**Problems**:
+- "Host" showing instead of actual opponent nickname when pressing "Play Again"
+- Player's own nickname appearing on both sides after "New Game" → "Create Room"
+- Inconsistent player card states between game sessions
+
+**Solutions**:
+- **Play Again Display**: Fixed `showRoomScreen` to not hardcode "Host" and properly clear player cards
+- **New Game State Reset**: Enhanced `resetToWelcome` to completely clear opponent name and player card displays
+- **Player Card Management**: Added `clearPlayerCards()` function and improved `updatePlayerCard()` to handle empty names
+- **Server Room Updates**: Added proper room state broadcasts on room creation and updates
+
+### 7. Missing Dependencies Error
 **Problem**: "Cannot find module 'express'" errors
 **Solution**: Ensured `npm install` is run before server start
 **Prevention**: Added clear setup instructions in deployment guides
 
-### 7. UI State Management
+### 8. UI State Management
 **Challenge**: Keeping UI synchronized with game state
 **Solution**: Centralized game state object with dedicated update methods
 **Pattern**: Single source of truth with reactive UI updates

@@ -580,12 +580,11 @@ class BreakTheCodeGame {
         document.getElementById('roomCode').textContent = this.gameState.roomCode;
         document.getElementById('gameRoomCode').textContent = this.gameState.roomCode;
         
-        // Update player cards
+        // Update player cards - always show your name in player1
         this.updatePlayerCard('player1', this.gameState.playerName, 'Setting up...', false);
         
-        if (!this.gameState.isHost) {
-            this.updatePlayerCard('player2', 'Host', 'Setting up...', false);
-        }
+        // Clear player2 card initially - it will be updated when opponent joins or via roomUpdate
+        this.updatePlayerCard('player2', '', 'Waiting for opponent...', false);
         
         // Show secret setup
         document.getElementById('secretSetup').style.display = 'block';
@@ -648,8 +647,20 @@ class BreakTheCodeGame {
         const statusEl = document.getElementById(`${cardId}Status`);
         const readyEl = document.getElementById(`${cardId}Ready`);
         
-        if (name && nameEl) nameEl.textContent = name;
-        if (statusEl) statusEl.textContent = status;
+        if (nameEl) {
+            if (name && name.trim()) {
+                nameEl.textContent = name;
+            } else {
+                // Show placeholder for empty names
+                if (cardId === 'player2') {
+                    nameEl.textContent = 'Waiting for player...';
+                } else {
+                    nameEl.textContent = '';
+                }
+            }
+        }
+        
+        if (statusEl) statusEl.textContent = status || '';
         
         if (readyEl) {
             if (ready) {
@@ -871,12 +882,21 @@ class BreakTheCodeGame {
             gameStatus: 'waiting',
             winner: null,
             score: { yours: 0, opponent: 0 },
-            opponentName: '' // Track opponent's name
+            opponentName: '' // Clear opponent name
         };
         
         this.switchScreen('welcomeScreen');
         document.getElementById('playerName').value = '';
         document.getElementById('playerName').focus();
+        
+        // Clear any existing player card displays
+        this.clearPlayerCards();
+    }
+    
+    clearPlayerCards() {
+        // Clear both player cards to ensure clean state
+        this.updatePlayerCard('player1', '', '', false);
+        this.updatePlayerCard('player2', '', '', false);
     }
     
     // Notification System

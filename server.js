@@ -211,6 +211,17 @@ io.on('connection', (socket) => {
         socket.join(roomCode);
         socket.emit('roomCreated', { roomCode, playerName });
         
+        // Send initial room state
+        const roomPlayers = Object.values(room.players).map(p => ({
+            name: p.name,
+            ready: p.ready
+        }));
+        
+        socket.emit('roomUpdate', {
+            players: roomPlayers,
+            gameState: room.gameState
+        });
+        
         console.log(`🏠 Room created: ${roomCode} by ${playerName}`);
     });
     
