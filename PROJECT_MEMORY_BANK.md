@@ -243,12 +243,23 @@ this.socket = io({
 ```
 - Implemented `rejoinRoom` functionality for seamless game continuation after reconnection
 
-### 5. Missing Dependencies Error
+### 5. UI/UX Display Issues (CRITICAL FIX) ⭐ *NEW*
+**Problems**: 
+- Opponent name showing as "Opponent" instead of actual nickname
+- Player status incorrectly showing "Ready!" when not ready
+- "New Game" button not working properly after completing a game
+
+**Solutions**:
+- **Opponent Name Display**: Added `opponentName` tracking in game state and proper extraction from server data
+- **Player Status Accuracy**: Fixed `updateRoomDisplay` to properly check `player.ready` status before showing "Ready!"
+- **New Game Functionality**: Added proper room cleanup with `leaveRoom` event and complete state reset
+
+### 6. Missing Dependencies Error
 **Problem**: "Cannot find module 'express'" errors
 **Solution**: Ensured `npm install` is run before server start
 **Prevention**: Added clear setup instructions in deployment guides
 
-### 6. UI State Management
+### 7. UI State Management
 **Challenge**: Keeping UI synchronized with game state
 **Solution**: Centralized game state object with dedicated update methods
 **Pattern**: Single source of truth with reactive UI updates

@@ -121,6 +121,12 @@ function trackPlayerAction(socketId, action) {
 
 function isRateLimited(socketId, action, maxActions = MAX_GUESSES_PER_MINUTE) {
     const actionCount = trackPlayerAction(socketId, action);
+    
+    // Log suspicious behavior
+    if (actionCount > maxActions) {
+        console.warn(`🚨 Rate limit exceeded: ${socketId} attempted ${actionCount} ${action} actions`);
+    }
+    
     return actionCount > maxActions;
 }
 
@@ -320,6 +326,17 @@ io.on('connection', (socket) => {
             socket.emit('secretNumberSet', 'Secret number set! Waiting for opponent...');
             socket.to(playerData.roomCode).emit('opponentReady', 
                 `${room.players[socket.id].name} is ready! Set your secret number to begin.`);
+            
+            // Send updated room state to all players
+            const roomPlayers = Object.values(room.players).map(p => ({
+                name: p.name,
+                ready: p.ready
+            }));
+            
+            io.to(playerData.roomCode).emit('roomUpdate', {
+                players: roomPlayers,
+                gameState: room.gameState
+            });
         }
     });
     
@@ -521,6 +538,38 @@ io.on('connection', (socket) => {
         });
         
         console.log(`🔄 Player ${playerName} rejoined room: ${roomCode}`);
+    });
+    
+    // Handle leave room request
+    socket.on('leaveRoom', () => {
+        const playerData = players.get(socket.id);
+        if (!playerData) return;
+        
+        const room = rooms.get(playerData.roomCode);
+        if (room) {
+            // Remove player from room
+            delete room.players[socket.id];
+            
+            // Notify remaining player
+            socket.to(playerData.roomCode).emit('playerDisconnected', {
+                message: `${playerData.playerName} has left the game.`,
+                canContinue: false
+            });
+            
+            // Leave the socket room
+            socket.leave(playerData.roomCode);
+            
+            // Clean up empty rooms
+            if (Object.keys(room.players).length === 0) {
+                rooms.delete(playerData.roomCode);
+                console.log(`🗑️ Empty room deleted: ${playerData.roomCode}`);
+            }
+        }
+        
+        // Remove player from players map
+        players.delete(socket.id);
+        
+        console.log(`👋 Player ${playerData?.playerName || socket.id} left room voluntarily`);
     });
     
     // Handle disconnect

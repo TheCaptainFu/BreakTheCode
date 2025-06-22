@@ -15,7 +15,8 @@ class BreakTheCodeGame {
             opponentGuesses: [],
             gameStatus: 'waiting', // waiting, setup, playing, finished
             winner: null,
-            score: { yours: 0, opponent: 0 }
+            score: { yours: 0, opponent: 0 },
+            opponentName: '' // Track opponent's name
         };
         
         this.init();
@@ -131,10 +132,16 @@ class BreakTheCodeGame {
             this.gameState.currentTurn = data.currentTurn;
             this.gameState.isMyTurn = data.currentTurn === this.socket.id;
             
-            // Find your secret number from the players data
+            // Find your secret number and opponent's name from the players data
             const yourPlayer = data.players.find(p => p.name === this.gameState.playerName);
+            const opponentPlayer = data.players.find(p => p.name !== this.gameState.playerName);
+            
             if (yourPlayer) {
                 this.gameState.secretNumber = yourPlayer.secretNumber;
+            }
+            
+            if (opponentPlayer) {
+                this.gameState.opponentName = opponentPlayer.name;
             }
             
             this.showGameScreen();
@@ -198,6 +205,7 @@ class BreakTheCodeGame {
             this.gameState.winner = null;
             this.gameState.currentTurn = null;
             this.gameState.isMyTurn = false;
+            // Keep opponent name as it should remain the same
             
             // Update scores if provided
             if (data.scores) {
@@ -208,6 +216,8 @@ class BreakTheCodeGame {
                         yours: myScore.score,
                         opponent: opponentScore.score
                     };
+                    // Update opponent name in case it changed
+                    this.gameState.opponentName = opponentScore.name;
                 }
             }
             
@@ -585,6 +595,7 @@ class BreakTheCodeGame {
     showGameScreen() {
         this.switchScreen('gameScreen');
         document.getElementById('yourNameMini').textContent = this.gameState.playerName;
+        document.getElementById('opponentNameMini').textContent = this.gameState.opponentName || 'Opponent';
         document.getElementById('yourScore').textContent = this.gameState.score.yours;
         document.getElementById('opponentScore').textContent = this.gameState.score.opponent;
         
@@ -662,12 +673,14 @@ class BreakTheCodeGame {
         // Update room display with player information
         if (data.players && data.players.length >= 1) {
             const player1 = data.players[0];
-            this.updatePlayerCard('player1', player1.name, player1.ready ? 'Ready!' : 'Setting up...', player1.ready);
+            const status1 = player1.ready ? 'Ready!' : 'Setting up...';
+            this.updatePlayerCard('player1', player1.name, status1, player1.ready);
         }
         
         if (data.players && data.players.length >= 2) {
             const player2 = data.players[1];
-            this.updatePlayerCard('player2', player2.name, player2.ready ? 'Ready!' : 'Setting up...', player2.ready);
+            const status2 = player2.ready ? 'Ready!' : 'Setting up...';
+            this.updatePlayerCard('player2', player2.name, status2, player2.ready);
         }
         
         // Update game status
@@ -835,7 +848,14 @@ class BreakTheCodeGame {
     }
     
     newGame() {
+        // Disconnect from current room if connected
+        if (this.socket && this.socket.connected && this.gameState.roomCode) {
+            this.socket.emit('leaveRoom');
+        }
+        
+        // Reset to welcome screen
         this.resetToWelcome();
+        this.showNotification('Starting fresh! Create or join a new room.', 'info');
     }
     
     resetToWelcome() {
@@ -850,7 +870,8 @@ class BreakTheCodeGame {
             opponentGuesses: [],
             gameStatus: 'waiting',
             winner: null,
-            score: { yours: 0, opponent: 0 }
+            score: { yours: 0, opponent: 0 },
+            opponentName: '' // Track opponent's name
         };
         
         this.switchScreen('welcomeScreen');
