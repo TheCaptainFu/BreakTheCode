@@ -30,7 +30,15 @@ class BreakTheCodeGame {
     
     // Socket.IO Connection Management
     initializeSocket() {
-        this.socket = io();
+        this.socket = io({
+            // Improved connection options for stability
+            reconnection: true,
+            reconnectionDelay: 1000,
+            reconnectionDelayMax: 5000,
+            maxReconnectionAttempts: 5,
+            timeout: 20000,
+            forceNew: true
+        });
         
         this.socket.on('connect', () => {
             console.log('🔗 Connected to server');
@@ -39,16 +47,44 @@ class BreakTheCodeGame {
             this.showNotification('Connected to game server!', 'success');
         });
         
-        this.socket.on('disconnect', () => {
-            console.log('❌ Disconnected from server');
+        this.socket.on('disconnect', (reason) => {
+            console.log('❌ Disconnected from server:', reason);
             this.updateConnectionStatus('disconnected');
-            this.showNotification('Connection lost. Trying to reconnect...', 'error');
+            
+            if (reason === 'io server disconnect') {
+                // Server disconnected us, try to reconnect
+                this.showNotification('Server disconnected. Attempting to reconnect...', 'error');
+                this.socket.connect();
+            } else {
+                // Client disconnected, will auto-reconnect
+                this.showNotification('Connection lost. Trying to reconnect...', 'error');
+            }
         });
         
-        this.socket.on('reconnect', () => {
-            console.log('🔄 Reconnected to server');
+        this.socket.on('reconnect', (attemptNumber) => {
+            console.log('🔄 Reconnected to server after', attemptNumber, 'attempts');
             this.updateConnectionStatus('connected');
             this.showNotification('Reconnected successfully!', 'success');
+            
+            // If we were in a game, try to rejoin the room
+            if (this.gameState.roomCode && this.gameState.playerName) {
+                this.showNotification('Attempting to rejoin your game...', 'info');
+                this.socket.emit('rejoinRoom', {
+                    roomCode: this.gameState.roomCode,
+                    playerName: this.gameState.playerName
+                });
+            }
+        });
+        
+        this.socket.on('reconnect_error', (error) => {
+            console.error('🔌 Reconnection failed:', error);
+            this.showNotification('Failed to reconnect. Please refresh the page.', 'error');
+        });
+        
+        this.socket.on('reconnect_failed', () => {
+            console.error('💥 Reconnection failed completely');
+            this.updateConnectionStatus('failed');
+            this.showNotification('Connection failed. Please refresh the page to continue.', 'error');
         });
         
         this.setupSocketEvents();
@@ -148,6 +184,88 @@ class BreakTheCodeGame {
             if (!data.canContinue) {
                 this.resetToWelcome();
             }
+        });
+        
+        // Handle new round started by server
+        this.socket.on('newRoundStarted', (data) => {
+            console.log('🔄 New round started:', data);
+            
+            // Reset local game state for new round
+            this.gameState.guesses = [];
+            this.gameState.opponentGuesses = [];
+            this.gameState.secretNumber = '';
+            this.gameState.gameStatus = 'setup';
+            this.gameState.winner = null;
+            this.gameState.currentTurn = null;
+            this.gameState.isMyTurn = false;
+            
+            // Update scores if provided
+            if (data.scores) {
+                const myScore = data.scores.find(s => s.name === this.gameState.playerName);
+                const opponentScore = data.scores.find(s => s.name !== this.gameState.playerName);
+                if (myScore && opponentScore) {
+                    this.gameState.score = {
+                        yours: myScore.score,
+                        opponent: opponentScore.score
+                    };
+                }
+            }
+            
+            this.showRoomScreen();
+            this.hideLoading();
+            this.showNotification(data.message, 'success');
+            
+            // Clear guess history displays
+            this.clearGuessList('yourGuesses');
+            this.clearGuessList('opponentGuesses');
+            
+            // Reset secret number inputs
+            ['digit1', 'digit2', 'digit3', 'digit4'].forEach(id => {
+                document.getElementById(id).value = '';
+            });
+            
+            // Focus on first digit input
+            document.getElementById('digit1').focus();
+        });
+        
+        // Handle successful room rejoin after reconnection
+        this.socket.on('roomRejoined', (data) => {
+            console.log('🏠 Room rejoined successfully:', data);
+            
+            // Restore game state
+            this.gameState.roomCode = data.roomCode;
+            this.gameState.isHost = data.isHost;
+            this.gameState.gameStatus = data.gameState;
+            this.gameState.currentTurn = data.currentTurn;
+            this.gameState.isMyTurn = data.isYourTurn;
+            
+            // Update scores if available
+            if (data.players) {
+                const myPlayer = data.players.find(p => p.name === this.gameState.playerName);
+                const opponentPlayer = data.players.find(p => p.name !== this.gameState.playerName);
+                if (myPlayer && opponentPlayer) {
+                    this.gameState.score = {
+                        yours: myPlayer.score,
+                        opponent: opponentPlayer.score
+                    };
+                }
+            }
+            
+            // Show appropriate screen based on game state
+            if (data.gameState === 'waiting' || data.gameState === 'setup') {
+                this.showRoomScreen();
+            } else if (data.gameState === 'playing') {
+                this.showGameScreen();
+                this.updateTurnDisplay();
+            }
+            
+            this.showNotification('Successfully rejoined your game!', 'success');
+        });
+        
+        // Handle other player reconnection
+        this.socket.on('playerReconnected', (data) => {
+            console.log('👥 Player reconnected:', data);
+            this.showNotification(data.message, 'info');
         });
         
         // Error Handling
@@ -707,14 +825,13 @@ class BreakTheCodeGame {
     
     // Game State Management
     playAgain() {
-        // Reset guess-related state but keep room and players
-        this.gameState.guesses = [];
-        this.gameState.opponentGuesses = [];
-        this.gameState.secretNumber = '';
-        this.gameState.gameStatus = 'setup';
-        
-        this.showRoomScreen();
-        this.showNotification('Setting up new round...', 'info');
+        // Send play again request to server
+        if (this.socket && this.socket.connected) {
+            this.showLoading('Starting new round...');
+            this.socket.emit('playAgain');
+        } else {
+            this.showNotification('Connection lost. Please refresh the page.', 'error');
+        }
     }
     
     newGame() {

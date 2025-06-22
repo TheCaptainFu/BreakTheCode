@@ -76,7 +76,7 @@ this.gameState = {
 - **Variables**: camelCase (playerName, roomCode, gameState)
 - **Functions**: camelCase with descriptive verbs (createRoom, validateGuess, handleGameEnd)
 - **CSS Classes**: kebab-case with BEM-like structure (player-card, guess-inputs, turn-indicator)
-- **Socket Events**: camelCase (roomCreated, gameStart, makeGuess)
+- **Socket Events**: camelCase (roomCreated, gameStart, makeGuess, playAgain, rejoinRoom)
 
 ## 🚀 Major Features Implemented
 
@@ -106,6 +106,16 @@ this.gameState = {
    - Live guess updates for both players
    - Game state synchronization
    - Connection status monitoring
+
+6. **Play Again System** ⭐ *NEW*
+   - Server-side game state reset
+   - Score preservation across rounds
+   - Synchronized new round initialization
+
+7. **Connection Recovery** ⭐ *NEW*
+   - Automatic reconnection with exponential backoff
+   - Room rejoin functionality after disconnect
+   - Seamless game continuation after reconnection
 
 ### UI/UX Features
 1. **Modern Design System**
@@ -198,12 +208,47 @@ for (let i = 0; i < 4; i++) {
 - Client-side UI updates based on turn state
 - Automatic turn switching after each guess
 
-### 3. Missing Dependencies Error
+### 3. Play Again Functionality (CRITICAL FIX) ⭐ *NEW*
+**Problem**: Play Again button didn't work - only reset client state, not server state
+**Root Cause**: No server-side communication for game reset
+**Solution**: 
+- Added `playAgain` socket event on server
+- Server properly resets room state while preserving scores
+- Client sends request to server instead of local reset
+- Added `newRoundStarted` event for synchronized state reset
+
+### 4. Connection Stability Issues (CRITICAL FIX) ⭐ *NEW*
+**Problem**: Frequent "lost connection" messages during gameplay
+**Root Cause**: Poor Socket.IO configuration and missing reconnection logic
+**Solution**:
+- Enhanced Socket.IO configuration with proper timeouts:
+```javascript
+const io = socketIo(server, {
+    pingTimeout: 60000,
+    pingInterval: 25000,
+    upgradeTimeout: 30000,
+    maxHttpBufferSize: 1e6
+});
+```
+- Added robust reconnection logic on client:
+```javascript
+this.socket = io({
+    reconnection: true,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 5000,
+    maxReconnectionAttempts: 5,
+    timeout: 20000,
+    forceNew: true
+});
+```
+- Implemented `rejoinRoom` functionality for seamless game continuation after reconnection
+
+### 5. Missing Dependencies Error
 **Problem**: "Cannot find module 'express'" errors
 **Solution**: Ensured `npm install` is run before server start
 **Prevention**: Added clear setup instructions in deployment guides
 
-### 4. UI State Management
+### 6. UI State Management
 **Challenge**: Keeping UI synchronized with game state
 **Solution**: Centralized game state object with dedicated update methods
 **Pattern**: Single source of truth with reactive UI updates

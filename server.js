@@ -49,7 +49,12 @@ const io = socketIo(server, {
     },
     // Additional security options
     allowEIO3: true,
-    transports: ['websocket', 'polling']
+    transports: ['websocket', 'polling'],
+    // Improved connection stability
+    pingTimeout: 60000,
+    pingInterval: 25000,
+    upgradeTimeout: 30000,
+    maxHttpBufferSize: 1e6
 });
 
 // Serve static files from public directory
@@ -421,6 +426,101 @@ io.on('connection', (socket) => {
         };
         
         socket.emit('roomStats', stats);
+    });
+    
+    // Handle play again request
+    socket.on('playAgain', () => {
+        const playerData = players.get(socket.id);
+        if (!playerData) return;
+        
+        const room = rooms.get(playerData.roomCode);
+        if (!room) return;
+        
+        // Reset game state for new round
+        room.gameState = 'setup';
+        room.winner = null;
+        room.currentTurn = null;
+        room.turnCount = 0;
+        room.guesses = {};
+        
+        // Reset all players' game-specific data but keep scores
+        Object.keys(room.players).forEach(playerId => {
+            room.players[playerId].secretNumber = null;
+            room.players[playerId].ready = false;
+            room.players[playerId].guesses = [];
+        });
+        
+        // Notify all players in the room that a new round is starting
+        io.to(playerData.roomCode).emit('newRoundStarted', {
+            message: 'New round started! Set your secret numbers.',
+            gameState: 'setup',
+            scores: Object.values(room.players).map(p => ({
+                name: p.name,
+                score: p.score
+            }))
+        });
+        
+        console.log(`🔄 New round started in room: ${playerData.roomCode}`);
+    });
+    
+    // Handle rejoin room after reconnection
+    socket.on('rejoinRoom', (data) => {
+        const { roomCode, playerName } = data;
+        
+        if (!isValidRoomCode(roomCode) || !isValidPlayerName(playerName)) {
+            socket.emit('error', 'Invalid room code or player name.');
+            return;
+        }
+        
+        const room = rooms.get(roomCode);
+        if (!room) {
+            socket.emit('error', 'Room no longer exists. Please start a new game.');
+            return;
+        }
+        
+        // Find the player in the room by name
+        const existingPlayerId = Object.keys(room.players).find(id => 
+            room.players[id].name === playerName
+        );
+        
+        if (!existingPlayerId) {
+            socket.emit('error', 'You are not a member of this room.');
+            return;
+        }
+        
+        // Update the player's socket ID
+        const playerData = room.players[existingPlayerId];
+        delete room.players[existingPlayerId];
+        room.players[socket.id] = playerData;
+        room.players[socket.id].id = socket.id;
+        
+        // Update the players map
+        players.set(socket.id, { roomCode, playerName });
+        
+        // Join the room
+        socket.join(roomCode);
+        
+        // Send current room state
+        socket.emit('roomRejoined', {
+            roomCode,
+            gameState: room.gameState,
+            isHost: Object.keys(room.players)[0] === socket.id,
+            players: Object.values(room.players).map(p => ({
+                name: p.name,
+                ready: p.ready,
+                score: p.score
+            })),
+            currentTurn: room.currentTurn,
+            isYourTurn: room.currentTurn === socket.id
+        });
+        
+        // Notify other players
+        socket.to(roomCode).emit('playerReconnected', {
+            playerName,
+            message: `${playerName} has reconnected to the game.`
+        });
+        
+        console.log(`🔄 Player ${playerName} rejoined room: ${roomCode}`);
     });
     
     // Handle disconnect
